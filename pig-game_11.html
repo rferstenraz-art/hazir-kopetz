@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>חזיר קופץ 🐷</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html { height:100%; }
+body {
+  min-height:100%;
+  background:#1a1a2e;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  font-family:'Courier New',monospace;
+  color:white;
+  padding:10px;
+}
+h1 { font-size:1.2rem; margin-bottom:6px; color:#fff; text-shadow:2px 2px 0 #e55039; text-align:center; }
+#score-display { font-size:1rem; margin-bottom:8px; }
+#c { border:3px solid #fff; border-radius:8px; display:block; }
+#hint { margin-top:10px; color:#aaa; font-size:0.8rem; }
+#btn {
+  margin-top:18px;
+  width:100px; height:100px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.15);
+  border:3px solid #fff;
+  color:#fff; font-size:2.5rem;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  display:none;
+}
+#btn:active { opacity:0.7; }
+#go {
+  display:none;
+  position:fixed; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  background:rgba(0,0,0,0.92);
+  color:#fff; font-size:1.4rem;
+  padding:22px 36px;
+  border-radius:12px; border:3px solid #fff;
+  text-align:center; z-index:99; min-width:220px;
+}
+#go button {
+  margin-top:14px; padding:10px 0;
+  font-size:1rem; background:#fff; border:none;
+  border-radius:6px; cursor:pointer; font-weight:bold;
+  display:block; width:100%;
+}
+#safari-tip {
+  display:none;
+  background:#e55039; color:#fff;
+  padding:10px 14px; border-radius:8px;
+  font-size:0.85rem; text-align:center;
+  margin-bottom:10px; line-height:1.4;
+}
+</style>
+</head>
+<body>
+<div id="safari-tip">⚠️ לחץ <strong>Done</strong> ← ⬆️ Share ← <strong>Open in Safari</strong></div>
+<h1>🐷 חזיר קופץ על שוטרים! 👮</h1>
+<div id="score-display">ניקוד: <span id="score">0</span></div>
+<canvas id="c"></canvas>
+<div id="hint">לחץ / נגע לקפוץ</div>
+<iframe id="spotify"
+  src="https://open.spotify.com/embed/track/1TwmCokeUen6QRSKpUlrCh?utm_source=generator&theme=0"
+  width="100%" height="80"
+  style="max-width:360px; border-radius:12px; margin-top:10px; border:none;"
+  allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+  loading="lazy">
+</iframe>
+<button id="btn">🐷</button>
+<div id="go">
+  <div>💥 נתפסת! 💥</div>
+  <div style="font-size:1rem;margin-top:6px">ניקוד: <span id="fs">0</span></div>
+  <button onclick="restart()">שחק שוב</button>
+</div>
+<script>
+(function(){
+  if(window.location.protocol==='file:')
+    document.getElementById('safari-tip').style.display='block';
+})();
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var LW=360, LH=160;
+canvas.width=LW; canvas.height=LH;
+
+function resize(){
+  var w=Math.min(window.innerWidth-20,680);
+  canvas.style.width=w+'px';
+  canvas.style.height=Math.round(LH*(w/LW))+'px';
+}
+resize();
+window.addEventListener('resize',resize);
+
+if('ontouchstart' in window){
+  document.getElementById('btn').style.display='block';
+  document.getElementById('hint').style.display='none';
+}
+
+var GY=115, PW=32, PH=28;
+var score=0,js=0,spd=2.5,fc=0,af,active=true;
+var pig={x:50,y:GY,vy:0,g:true,lp:0};
+var cops=[],nxt=60,parts=[];
+
+function drawBg(){
+  var sky=ctx.createLinearGradient(0,0,0,120);
+  sky.addColorStop(0,'#87CEEB'); sky.addColorStop(1,'#c9e8ff');
+  ctx.fillStyle=sky; ctx.fillRect(0,0,LW,130);
+  ctx.fillStyle='#5c8a3c'; ctx.fillRect(0,130,LW,LH);
+  ctx.fillStyle='#4a7a2c'; ctx.fillRect(0,133,LW,4);
+  cl(70,20,fc*0.12); cl(200,30,fc*0.08); cl(310,18,fc*0.14);
+}
+function cl(x,y,o){
+  var cx=(x-o%LW+LW)%LW;
+  ctx.fillStyle='rgba(255,255,255,0.9)';
+  ctx.beginPath();
+  ctx.arc(cx,y,12,0,Math.PI*2);
+  ctx.arc(cx+16,y-5,15,0,Math.PI*2);
+  ctx.arc(cx+30,y,12,0,Math.PI*2);
+  ctx.fill();
+}
+
+function drawPig(){
+  var x=pig.x, y=pig.y;
+  var b=pig.g?Math.sin(pig.lp)*2.5:0;
+  ctx.fillStyle='#e8a0a0';
+  ctx.fillRect(x+5,y+19,6,8+(b>0?b:0));
+  ctx.fillRect(x+18,y+19,6,8+(b<0?-b:0));
+  ctx.fillStyle='#f4b8b8';
+  ctx.beginPath(); ctx.ellipse(x+16,y+14,15,11,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#f9caca';
+  ctx.beginPath(); ctx.arc(x+25,y+7,10,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#e88888';
+  ctx.beginPath(); ctx.ellipse(x+30,y+10,5,4,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#c06060';
+  ctx.beginPath(); ctx.arc(x+28,y+11,1.5,0,Math.PI*2); ctx.arc(x+32,y+11,1.5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#222'; ctx.beginPath(); ctx.arc(x+27,y+5,2,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='white'; ctx.beginPath(); ctx.arc(x+27.5,y+4.5,0.8,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#f4a0a0'; ctx.beginPath(); ctx.ellipse(x+19,y+1,4,6,-0.3,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#e88888'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(x+2,y+12); ctx.bezierCurveTo(x-6,y+6,x-8,y+18,x-3,y+18); ctx.stroke();
+}
+
+function drawCop(c){
+  var x=c.x, y=c.y;
+  ctx.fillStyle='#1a237e'; ctx.fillRect(x+3,y+24,7,11); ctx.fillRect(x+14,y+24,7,11);
+  ctx.fillStyle='#1565c0'; ctx.beginPath(); ctx.roundRect(x+1,y+11,22,16,3); ctx.fill();
+  ctx.fillStyle='#c0c0c0'; ctx.beginPath(); ctx.arc(x+12,y+17,3,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#ffe0b2'; ctx.beginPath(); ctx.arc(x+12,y+7,7,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#0d47a1'; ctx.fillRect(x+4,y+1,16,5); ctx.fillRect(x+6,y-4,10,6);
+  ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(x+9,y+7,1.3,0,Math.PI*2); ctx.arc(x+15,y+7,1.3,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#333'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x+8,y+12); ctx.quadraticCurveTo(x+12,y+10,x+16,y+12); ctx.stroke();
+  ctx.fillStyle='#1565c0'; ctx.fillRect(x-3,y+13,5,8); ctx.fillRect(x+22,y+13,5,8);
+  ctx.strokeStyle='#5d3a1a'; ctx.lineWidth=2.5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(x+24,y+19); ctx.lineTo(x+31,y+12); ctx.stroke();
+  ctx.strokeStyle='#3e2008'; ctx.lineWidth=4.5;
+  ctx.beginPath(); ctx.moveTo(x+28,y+15); ctx.lineTo(x+33,y+9); ctx.stroke();
+}
+
+function dparts(){
+  parts.forEach(function(p){
+    ctx.globalAlpha=p.l/30;
+    ctx.font=p.t==='💥'?'11px Arial':'bold 9px Courier New';
+    ctx.fillStyle=p.t==='+10'?'#ff4444':'white';
+    ctx.fillText(p.t,p.x,p.y);
+    p.x+=p.vx; p.y+=p.vy; p.l--;
+  });
+  ctx.globalAlpha=1;
+  parts=parts.filter(function(p){return p.l>0;});
+}
+function spawn(x,y){
+  for(var i=0;i<6;i++){
+    var a=(Math.PI*2/6)*i;
+    parts.push({x:x,y:y,vx:Math.cos(a)*2,vy:Math.sin(a)*2-1.5,l:30,t:i%2===0?'💥':'+10'});
+  }
+}
+
+function stomp(c){
+  return pig.vy>0&&pig.x+8<c.x+c.w&&pig.x+PW-8>c.x&&pig.y+PH>c.y&&pig.y+PH<c.y+14;
+}
+function hit(c){
+  return pig.x+6<c.x+c.w-3&&pig.x+PW-6>c.x+3&&pig.y+6<c.y+c.h&&pig.y+PH>c.y+6;
+}
+
+function jump(){
+  if(!active) return;
+  if(pig.g){ pig.vy=-8; pig.g=false; }
+}
+
+function loop(){
+  fc++;
+  pig.vy+=0.38; pig.y+=pig.vy;
+  if(pig.y>=GY){ pig.y=GY; pig.vy=0; pig.g=true; }
+  if(pig.g) pig.lp+=0.18;
+  cops.forEach(function(c){c.x-=spd;});
+  cops=cops.filter(function(c){return c.x>-50;});
+  nxt--;
+  if(nxt<=0){
+    cops.push({x:LW+10,y:GY-35+PH-8,w:24,h:35});
+    nxt=55+Math.floor(Math.random()*55);
+  }
+  if(fc%400===0) spd+=0.25;
+  for(var i=cops.length-1;i>=0;i--){
+    var c=cops[i];
+    if(stomp(c)){ pig.vy=-7; pig.g=false; spawn(c.x+c.w/2,c.y); cops.splice(i,1); js+=10; }
+    else if(hit(c)){ over(); return; }
+  }
+  score++;
+  document.getElementById('score').textContent=Math.floor(score/8)+js;
+  ctx.clearRect(0,0,LW,LH);
+  drawBg(); cops.forEach(drawCop); drawPig(); dparts();
+  af=requestAnimationFrame(loop);
+}
+
+function over(){
+  active=false;
+  document.getElementById('fs').textContent=Math.floor(score/8)+js;
+  document.getElementById('go').style.display='block';
+}
+function restart(){
+  score=0; js=0; parts=[]; spd=2.5; fc=0;
+  cops=[]; nxt=60; pig.y=GY; pig.vy=0; pig.g=true; pig.lp=0; active=true;
+  document.getElementById('go').style.display='none';
+  document.getElementById('score').textContent='0';
+  cancelAnimationFrame(af);
+  loop();
+}
+
+document.addEventListener('keydown',function(e){
+  if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault();jump();}
+});
+canvas.addEventListener('touchstart',function(e){e.preventDefault();jump();},{passive:false});
+canvas.addEventListener('click',jump);
+var b=document.getElementById('btn');
+b.addEventListener('touchstart',function(e){e.preventDefault();jump();},{passive:false});
+b.addEventListener('click',jump);
+
+loop();
+
+// ── מוזיקה ──
+var music = new Audio('music.mp3');
+music.loop = true;
+music.volume = 0.5;
+
+// iOS + דפדפנים מודרניים דורשים gesture ראשון להפעלת אודיו
+var musicStarted = false;
+function tryStartMusic(){
+  if(!musicStarted){
+    musicStarted = true;
+    music.play().catch(function(){});
+  }
+}
+document.addEventListener('touchstart', tryStartMusic, {once:true});
+document.addEventListener('click', tryStartMusic, {once:true});
+document.addEventListener('keydown', tryStartMusic, {once:true});
+</script>
+</body>
+</html>
